@@ -1,7 +1,7 @@
 #include "logs/interfaces/console/logs.hpp"
 #include "logs/interfaces/group/logs.hpp"
 #include "logs/interfaces/storage/logs.hpp"
-#include "tts/interfaces/googlebasic.hpp"
+#include "speech/tts/interfaces/googlebasic.hpp"
 
 #include <iostream>
 
@@ -33,10 +33,10 @@ int main(int argc, char** argv)
             tts->speakasync("Jestem twoim asynk asystentem, co mam zrobić?");
             sleep(1);
             tts->speakasync("Jestem twoim asynk asystentem, co mam zrobić?");
-            sleep(2);
-            while (
-                !tts->speak("Jestem twoim zwykłym asystentem, co mam zrobić?"))
-                usleep(100 * 1000);
+            sleep(1);
+            tts->speak("Jestem twoim zwykłym asystentem, co mam zrobić?");
+            tts->waitspoken();
+            tts->speak("Jestem twoim zwykłym asystentem, co mam zrobić?");
 
             tts::TextToVoiceFactory::create<TextToVoice, configmin_t>(
                 {{tts::language::english, tts::gender::male, 1}, logif})

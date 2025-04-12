@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 
 set(CMAKE_CXX_STANDARD 20)
-project(tts)
+project(speech)
 
 include(cmake/vcpkg/setup.cmake)
 include(cmake/flags.cmake)
@@ -17,14 +17,17 @@ endif()
 add_subdirectory(examples)
 
 include_directories(inc)
-file(GLOB SOURCES "src/*.cpp")
+file(GLOB_RECURSE SOURCES "src/*.cpp")
 
 add_library(${PROJECT_NAME} ${SOURCES})
 add_dependencies(${PROJECT_NAME} liblogger)
 add_dependencies(${PROJECT_NAME} libshellcmd)
 add_dependencies(${PROJECT_NAME} libnlohmann)
-IF(NOT Boost_FOUND)
-    add_dependencies(${PROJECT_NAME} libboost)
-ENDIF()
-target_link_libraries(${PROJECT_NAME} logger shell CURL::libcurl google-cloud-cpp::texttospeech google-cloud-cpp::speech)
 
+target_link_libraries(${PROJECT_NAME}
+    logger
+    shell
+    CURL::libcurl
+    google-cloud-cpp::texttospeech
+    google-cloud-cpp::speech
+)

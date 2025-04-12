@@ -2,13 +2,13 @@
 
 #include "logs/interfaces/logs.hpp"
 #include "shell/interfaces/shell.hpp"
-#include "tts/factory.hpp"
-#include "tts/helpers.hpp"
+#include "speech/helpers.hpp"
+#include "speech/tts/factory.hpp"
 
 #include <tuple>
 #include <variant>
 
-namespace tts::googlecloud
+namespace tts::googlebasic
 {
 
 using configmin_t = std::tuple<voice_t, std::shared_ptr<logs::LogIf>>;
@@ -25,8 +25,7 @@ class TextToVoice : public TextToVoiceIf
     bool speak(const std::string&, const voice_t&) override;
     bool speakasync(const std::string&) override;
     bool speakasync(const std::string&, const voice_t&) override;
-    transcript_t listen() override;
-    transcript_t listen(language) override;
+    bool waitspoken() override;
     voice_t getvoice() override;
     void setvoice(const voice_t&) override;
 
@@ -38,4 +37,4 @@ class TextToVoice : public TextToVoiceIf
     std::shared_ptr<Handler> handler;
 };
 
-} // namespace tts::googlecloud
+} // namespace tts::googlebasic

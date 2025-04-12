@@ -1,13 +1,11 @@
-#include "tts/interfaces/googlecloud.hpp"
+#include "speech/tts/interfaces/googlecloud.hpp"
 
 #include "google/cloud/common_options.h"
 #include "google/cloud/credentials.h"
-#include "google/cloud/project.h"
-#include "google/cloud/speech/v2/speech_client.h"
 #include "google/cloud/texttospeech/v1/text_to_speech_client.h"
 
 #include "shell/interfaces/linux/bash/shell.hpp"
-#include "tts/helpers.hpp"
+#include "speech/helpers.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -25,37 +23,14 @@ namespace texttospeech_type = google::cloud::texttospeech_v1;
 using namespace helpers;
 using namespace std::string_literals;
 using ssmlgender = texttospeech::SsmlVoiceGender;
-using recognizer_t =
-    std::tuple<std::string, std::string, std::string, std::string>;
-
-namespace speech = google::cloud::speech::v2;
-namespace speech_type = google::cloud::speech_v2;
-
-std::string getrecordingcmd(const std::string& file,
-                            const std::string& interval)
-{
-    // "sox --no-show-progress --type alsa default --rate 16k --channels 1
-    // #file# silence -l 1 1 2.0% 1 2.0t 1.0% pad 0.3 0.2";
-    auto ivtime = !interval.empty() ? interval : "2.0t";
-    return "sox --no-show-progress --type alsa default --rate 16k --channels "
-           "1 " +
-           file + " silence -l 1 1 2.0% 1 " + ivtime + " 1.0% pad 0.3 0.2";
-}
 
 static const std::filesystem::path keyFile = "../conf/key.json";
 static const std::filesystem::path audioDirectory = "audio";
 static const std::filesystem::path playbackName = "playback.mp3";
-static const std::filesystem::path recordingName = "recording.wav";
-static const auto audioFilePath = audioDirectory / recordingName;
 static const std::string playAudioCmd =
     "play --no-show-progress " + (audioDirectory / playbackName).native() +
     " --type alsa";
-static auto recordAudioCmd = getrecordingcmd(audioFilePath.native(), {});
 // static constexpr const char* keyEnvVar = "GOOGLE_APPLICATION_CREDENTIALS";
-// static const recognizer_t recognizerInfo = {"lukaszsttproject",
-// "europe-west4", "stt-region", "chirp_2"};
-static const recognizer_t recognizerInfo = {"lukaszsttproject", "eu",
-                                            "stt-global", "short"};
 
 static const std::map<voice_t, std::tuple<std::string, std::string, ssmlgender>>
     voiceMap = {{{language::polish, gender::female, 1},
@@ -76,18 +51,6 @@ static const std::map<voice_t, std::tuple<std::string, std::string, ssmlgender>>
                  {"de-DE", "de-DE-Standard-C", ssmlgender::FEMALE}},
                 {{language::german, gender::male, 1},
                  {"de-DE", "de-DE-Standard-B", ssmlgender::MALE}}};
-
-// enum class language
-// {
-//     polish,
-//     english,
-//     german
-// };
-
-static const std::unordered_map<language, std::string> langMap = {
-    {language::polish, "pl-PL"},
-    {language::english, "en-US"},
-    {language::german, "de-DE"}};
 
 struct TextToVoice::Handler : public std::enable_shared_from_this<Handler>
 {
@@ -156,30 +119,9 @@ struct TextToVoice::Handler : public std::enable_shared_from_this<Handler>
         });
     }
 
-    transcript_t listen()
+    bool waitspoken() const
     {
-        while (true)
-        {
-            log(logs::level::debug, "Recording voice by: " + recordAudioCmd);
-            shell->run(recordAudioCmd);
-            google.uploadaudio(audioFilePath);
-            if (auto transcript = google.gettranscript())
-                return *transcript;
-        }
-        return {};
-    }
-
-    transcript_t listen(language lang)
-    {
-        while (true)
-        {
-            log(logs::level::debug, "Recording voice by: " + recordAudioCmd);
-            shell->run(recordAudioCmd);
-            google.uploadaudio(audioFilePath);
-            if (auto transcript = google.gettranscript(lang))
-                return *transcript;
-        }
-        return {};
+        return helpers->waitasync();
     }
 
     void setvoice(const voice_t& voice)
@@ -269,40 +211,12 @@ struct TextToVoice::Handler : public std::enable_shared_from_this<Handler>
                                 return std::string(
                                     std::istreambuf_iterator<char>(ifs.rdbuf()),
                                     {});
-                            }(keyfile))))},
-            clientstt{speech_type::MakeSpeechConnection(
-                std::get<1>(recognizerInfo),
-                google::cloud::Options{}
-                    .set<google::cloud::UnifiedCredentialsOption>(
-                        google::cloud::MakeServiceAccountCredentials(
-                            [](const std::filesystem::path& file) {
-                                std::ifstream ifs(file);
-                                if (!ifs.is_open())
-                                    throw std::runtime_error(
-                                        "Cannot open key file for STT");
-                                return std::string(
-                                    std::istreambuf_iterator<char>(ifs.rdbuf()),
-                                    {});
                             }(keyfile))))}
         {
             setvoice(voice);
             audio.set_audio_encoding(texttospeech::LINEAR16);
-
-            const auto& config = request.mutable_config();
-            *config->mutable_auto_decoding_config() = {};
-            config->set_model(std::get<3>(recognizerInfo));
-            request.set_recognizer("projects/" + std::get<0>(recognizerInfo) +
-                                   "/locations/" + std::get<1>(recognizerInfo) +
-                                   "/recognizers/" +
-                                   std::get<2>(recognizerInfo));
-            setlang(language::polish);
-
-            // handler->log(logs::level::info,
-            //              "Created v2::gcloud stt [langcode/langid]: " +
-            //                  getparams());
-
             handler->log(logs::level::info,
-                         "Created gcloud speech [langcode/langname/gender]: " +
+                         "Created gcloud tts [langcode/langname/gender]: " +
                              getparams());
         }
 
@@ -349,61 +263,6 @@ struct TextToVoice::Handler : public std::enable_shared_from_this<Handler>
             params.set_ssml_gender(gender);
         }
 
-        void uploadaudio(const std::filesystem::path& filepath)
-        {
-            request.set_content([](const std::filesystem::path& path) {
-                std::ifstream ifs(path, std::ios::in | std::ios::binary);
-                if (!ifs.is_open())
-                    throw std::runtime_error("Cannot open audio file for STT");
-                return std::string(std::istreambuf_iterator<char>(ifs.rdbuf()),
-                                   {});
-            }(filepath));
-            handler->log(logs::level::debug,
-                         "Uploaded audio to stt engine: " + filepath.native());
-        }
-
-        std::optional<transcript_t> gettranscript()
-        {
-            if (auto response = clientstt.Recognize(request))
-            {
-                handler->log(logs::level::debug,
-                             "Received results: " +
-                                 str(response->results_size()));
-                for (const auto& result : response->results())
-                {
-                    handler->log(logs::level::debug,
-                                 "Received alternatives: " +
-                                     str(result.alternatives_size()));
-                    for (const auto& alternative : result.alternatives())
-                    {
-                        auto text = alternative.transcript();
-                        if (text.empty())
-                            continue;
-                        auto confid = alternative.confidence();
-                        auto quality = (uint32_t)std::lround(100 * confid);
-                        handler->log(logs::level::debug,
-                                     "Returning transcript [text/confid]: '" +
-                                         text + "'/" + str(confid));
-                        return std::make_optional<transcript_t>(std::move(text),
-                                                                quality);
-                    }
-                }
-            }
-            handler->log(logs::level::debug, "Cannot recognize transcript");
-            return std::nullopt;
-        }
-
-        std::optional<transcript_t> gettranscript(language tmplang)
-        {
-            const auto mainlang{lang};
-            setlang(tmplang);
-            auto transcript = gettranscript();
-            handler->log(logs::level::debug,
-                         "Speech detected for " + getparams());
-            setlang(mainlang);
-            return transcript;
-        }
-
         std::string getparams() const
         {
             auto gender = params.ssml_gender();
@@ -416,28 +275,10 @@ struct TextToVoice::Handler : public std::enable_shared_from_this<Handler>
       private:
         const Handler* handler;
         texttospeech_type::TextToSpeechClient client;
-        speech_type::SpeechClient clientstt;
-        speech::RecognizeRequest request;
         texttospeech::SynthesisInput input;
         texttospeech::VoiceSelectionParams params;
         texttospeech::AudioConfig audio;
         voice_t voice;
-        language lang;
-
-        void setlang(language lang)
-        {
-            auto langId = [this](language newlang) {
-                this->lang = newlang;
-                static constexpr auto deflang{language::polish};
-                return langMap.contains(newlang) ? langMap.at(newlang)
-                                                 : langMap.at(deflang);
-            }(lang);
-
-            const auto& config = request.mutable_config();
-            config->language_codes_size()
-                ? config->set_language_codes(0, langId)
-                : config->add_language_codes(langId);
-        }
     } google;
 
     void log(
@@ -486,6 +327,11 @@ bool TextToVoice::speakasync(const std::string& text, const voice_t& voice)
     return handler->speakasync(text, voice);
 }
 
+bool TextToVoice::waitspoken()
+{
+    return handler->waitspoken();
+}
+
 voice_t TextToVoice::getvoice()
 {
     return handler->getvoice();
@@ -494,16 +340,6 @@ voice_t TextToVoice::getvoice()
 void TextToVoice::setvoice(const voice_t& voice)
 {
     handler->setvoice(voice);
-}
-
-transcript_t TextToVoice::listen()
-{
-    return handler->listen();
-}
-
-transcript_t TextToVoice::listen(language lang)
-{
-    return handler->listen(lang);
 }
 
 } // namespace tts::googlecloud

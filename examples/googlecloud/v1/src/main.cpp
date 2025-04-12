@@ -1,7 +1,8 @@
 #include "logs/interfaces/console/logs.hpp"
 #include "logs/interfaces/group/logs.hpp"
 #include "logs/interfaces/storage/logs.hpp"
-#include "speech/tts/interfaces/googleapi.hpp"
+#include "speech/stt/interfaces/v1/googlecloud.hpp"
+#include "speech/tts/interfaces/googlecloud.hpp"
 
 #include <iostream>
 
@@ -24,12 +25,20 @@ int main(int argc, char** argv)
                 logs::Factory::create<logs::group::Log, logs::group::config_t>(
                     {logconsole, logstorage});
 
-            using namespace tts::googleapi;
             auto tts =
-                tts::TextToVoiceFactory::create<TextToVoice, configmin_t>(
+                tts::TextToVoiceFactory::create<tts::googlecloud::TextToVoice,
+                                                tts::googlecloud::configmin_t>(
                     {{tts::language::polish, tts::gender::female, 1}, logif});
 
-            tts->speak("Jestem twoim zwykłym asystentem, co mam zrobić?");
+            auto stt = stt::TextFromVoiceFactory::create<
+                stt::v1::googlecloud::TextFromVoice,
+                stt::v1::googlecloud::configmin_t>(
+                {stt::language::polish, "1.0t", logif});
+
+            tts->speak("Jestem twoim zwykłym asystentem, powiedz coś");
+            auto spoken = stt->listen();
+            tts->speak("Jestem pewna w " + helpers::str(std::get<1>(spoken)) +
+                       "%, że powiedziałeś: '" + std::get<0>(spoken) + "'");
             tts->speakasync("Jestem twoim asynk asystentem, co mam zrobić?");
             sleep(1);
             tts->speakasync("Jestem twoim asynk asystentem, co mam zrobić?");
@@ -48,7 +57,8 @@ int main(int argc, char** argv)
                        {tts::language::polish, tts::gender::male, 1});
             tts->speak("Jestem twoim asystentem, co mam zrobić?",
                        {tts::language::polish, tts::gender::male, 2});
-            tts::TextToVoiceFactory::create<TextToVoice, configmin_t>(
+            tts::TextToVoiceFactory::create<tts::googlecloud::TextToVoice,
+                                            tts::googlecloud::configmin_t>(
                 {{tts::language::english, tts::gender::female, 1}, logif})
                 ->speak("Hi, this is second speech!");
             tts->speak("Tschüss, wie gehts du?",

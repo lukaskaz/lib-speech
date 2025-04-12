@@ -3,12 +3,7 @@
     {
       "name": "google-cloud-cpp",
       "default-features": false,
-      "features": ["texttospeech"]
-    },
-    {
-      "name": "google-cloud-cpp",
-      "default-features": false,
-      "features": ["speech"]
+      "features": ["texttospeech", "speech"]
     },
     {
       "name": "curl",

@@ -22,7 +22,6 @@ enum class gender
 
 using index = uint8_t;
 using voice_t = std::tuple<language, gender, index>;
-using transcript_t = std::pair<std::string, uint32_t>;
 
 class TextToVoiceIf
 {
@@ -32,8 +31,7 @@ class TextToVoiceIf
     virtual bool speak(const std::string&, const voice_t&) = 0;
     virtual bool speakasync(const std::string&) = 0;
     virtual bool speakasync(const std::string&, const voice_t&) = 0;
-    virtual transcript_t listen() = 0;
-    virtual transcript_t listen(language) = 0;
+    virtual bool waitspoken() = 0;
     virtual voice_t getvoice() = 0;
     virtual void setvoice(const voice_t&) = 0;
     static void kill();

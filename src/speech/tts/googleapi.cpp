@@ -1,35 +1,54 @@
-#include "tts/interfaces/googlebasic.hpp"
+#include "speech/tts/interfaces/googleapi.hpp"
 
 #include "shell/interfaces/linux/bash/shell.hpp"
-#include "tts/helpers.hpp"
+#include "speech/helpers.hpp"
+
+#include <boost/beast/core/detail/base64.hpp>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <mutex>
 #include <source_location>
 
-namespace tts::googlebasic
+namespace tts::googleapi
 {
 
 using namespace helpers;
 using namespace std::string_literals;
+using json = nlohmann::json;
 
+static const std::filesystem::path configFile = "../conf/init.json";
 static const std::filesystem::path audioDirectory = "audio";
 static const std::filesystem::path playbackName = "playback.mp3";
 static const std::string playAudioCmd =
     "play --no-show-progress " + (audioDirectory / playbackName).native() +
     " --type alsa";
-static constexpr const char* convUri =
-    "https://translate.google.com/translate_tts?client=tw-ob";
+static const std::string convUri =
+    "https://texttospeech.googleapis.com/v1/text:synthesize";
 
-static const std::map<voice_t, std::string> voiceMap = {
-    {{language::polish, gender::male, 1}, "pl"},
-    {{language::polish, gender::female, 1}, "pl"},
-    {{language::english, gender::male, 1}, "en"},
-    {{language::english, gender::female, 1}, "en"},
-    {{language::german, gender::male, 1}, "de"},
-    {{language::german, gender::female, 1}, "de"}};
+static const std::map<voice_t,
+                      std::tuple<std::string, std::string, std::string>>
+    voiceMap = {{{language::polish, gender::female, 1},
+                 {"pl-PL", "pl-PL-Standard-E", "FEMALE"}},
+                {{language::polish, gender::female, 2},
+                 {"pl-PL", "pl-PL-Standard-A", "FEMALE"}},
+                {{language::polish, gender::female, 3},
+                 {"pl-PL", "pl-PL-Standard-D", "FEMALE"}},
+                {{language::polish, gender::male, 1},
+                 {"pl-PL", "pl-PL-Standard-B", "MALE"}},
+                {{language::polish, gender::male, 2},
+                 {"pl-PL", "pl-PL-Standard-C", "MALE"}},
+                {{language::english, gender::female, 1},
+                 {"en-US", "en-US-Standard-C", "FEMALE"}},
+                {{language::english, gender::male, 1},
+                 {"en-US", "en-US-Standard-A", "MALE"}},
+                {{language::german, gender::female, 1},
+                 {"de-DE", "de-DE-Standard-C", "FEMALE"}},
+                {{language::german, gender::male, 1},
+                 {"de-DE", "de-DE-Standard-B", "MALE"}}};
 
 struct TextToVoice::Handler : public std::enable_shared_from_this<Handler>
 {
@@ -39,7 +58,7 @@ struct TextToVoice::Handler : public std::enable_shared_from_this<Handler>
         shell{shell::Factory::create<shell::lnx::bash::Shell>()},
         helpers{helpers::HelpersFactory::create()},
         filesystem{this, audioDirectory / playbackName},
-        google{this, std::get<voice_t>(config), audioDirectory / playbackName}
+        google{this, configFile, std::get<voice_t>(config)}
     {}
 
     explicit Handler(const configall_t& config) :
@@ -47,7 +66,7 @@ struct TextToVoice::Handler : public std::enable_shared_from_this<Handler>
         shell{std::get<std::shared_ptr<shell::ShellIf>>(config)},
         helpers{std::get<std::shared_ptr<helpers::HelpersIf>>(config)},
         filesystem{this, audioDirectory / playbackName},
-        google{this, std::get<voice_t>(config), audioDirectory / playbackName}
+        google{this, configFile, std::get<voice_t>(config)}
     {}
 
     bool speak(const std::string& text)
@@ -56,7 +75,8 @@ struct TextToVoice::Handler : public std::enable_shared_from_this<Handler>
             lock.try_lock())
         {
             log(logs::level::debug, "Requested text to speak: '" + text + "'");
-            google.getaudio(text);
+            auto audio = google.getaudio(text);
+            filesystem.savetofile(audio);
             shell->run(playAudioCmd);
             return true;
         }
@@ -71,7 +91,8 @@ struct TextToVoice::Handler : public std::enable_shared_from_this<Handler>
             lock.try_lock())
         {
             log(logs::level::debug, "Requested text to speak: '" + text + "'");
-            google.getaudio(text, voice);
+            auto audio = google.getaudio(text, voice);
+            filesystem.savetofile(audio);
             shell->run(playAudioCmd);
             return true;
         }
@@ -82,7 +103,7 @@ struct TextToVoice::Handler : public std::enable_shared_from_this<Handler>
 
     bool speakasync(const std::string& text)
     {
-        return helpers->createasync([this, weak = weak_from_this(), text]() {
+        return helpers->createasync([weak = weak_from_this(), text]() {
             if (auto self = weak.lock())
                 self->speak(text);
         });
@@ -90,11 +111,15 @@ struct TextToVoice::Handler : public std::enable_shared_from_this<Handler>
 
     bool speakasync(const std::string& text, const voice_t& voice)
     {
-        return helpers->createasync(
-            [this, weak = weak_from_this(), text, voice]() {
-                if (auto self = weak.lock())
-                    self->speak(text, voice);
-            });
+        return helpers->createasync([weak = weak_from_this(), text, voice]() {
+            if (auto self = weak.lock())
+                self->speak(text, voice);
+        });
+    }
+
+    bool waitspoken() const
+    {
+        return helpers->waitasync();
     }
 
     void setvoice(const voice_t& voice)
@@ -116,10 +141,8 @@ struct TextToVoice::Handler : public std::enable_shared_from_this<Handler>
     class Filesystem
     {
       public:
-        explicit Filesystem(const Handler* handler,
-                            const std::filesystem::path& path) :
-            handler{handler},
-            path{path}
+        Filesystem(const Handler* handler, const std::filesystem::path& path) :
+            handler{handler}, path{path}
         {
             createdirectory();
         }
@@ -154,45 +177,74 @@ struct TextToVoice::Handler : public std::enable_shared_from_this<Handler>
                                  path.parent_path().native() + "'");
         }
 
+        void savetofile(const std::string& data) const
+        {
+            std::ofstream ofs(path, std::ios::binary);
+            ofs << data;
+            handler->log(logs::level::debug,
+                         "Written data of size: " + str(data.size()) +
+                             ", to file: '" + path.native() + "'");
+        }
+
       private:
         const Handler* handler;
         const std::filesystem::path path;
         bool direxist;
     } filesystem;
-
     class Google
     {
       public:
-        Google(const Handler* handler, const voice_t& voice,
-               const std::string& audiopath) :
-            handler{handler},
-            audiopath{audiopath}
+        Google(const Handler* handler, const std::filesystem::path& configfile,
+               const voice_t& voice) :
+            handler{handler}, audiourl{[](const std::filesystem::path& file) {
+                std::ifstream ifs(file);
+                if (!ifs.is_open())
+                    throw std::runtime_error("Cannot open config file for TTS");
+                auto content = std::string(
+                    std::istreambuf_iterator<char>(ifs.rdbuf()), {});
+                json ttsConfig = json::parse(content)["tts"];
+                if (ttsConfig["key"].is_null() ||
+                    ttsConfig["key"].get<std::string>().empty())
+                    throw std::runtime_error(
+                        "Cannot get TTS key from config file");
+                return convUri + "?key=" + ttsConfig["key"].get<std::string>();
+            }(configfile)},
+            voice{voice}
         {
-            setvoice(voice);
             handler->log(logs::level::info,
-                         "Created gbasic tts [lang/gender/idx]: " +
+                         "Created gapi tts [langcode/langname/gender]: " +
                              getparams());
         }
 
         ~Google()
         {
             handler->log(logs::level::info,
-                         "Released gbasic tts [lang/gender/idx]: " +
+                         "Released gapi tts [langcode/langname/gender]: " +
                              getparams());
         }
 
-        void getaudio(const std::string& text)
+        std::string getaudio(const std::string& text)
         {
-            handler->helpers->downloadFile(audiourl, text, audiopath);
+            const auto& [code, name, gender] = getmappedvoice();
+            const std::string config =
+                "{'input':{'text':'" + text + "'},'voice':{'languageCode':'" +
+                code + "','name':'" + name + "','ssmlGender':'" + gender +
+                "'},'audioConfig':{'audioEncoding':'MP3'}}";
+            std::string audioData;
+            handler->helpers->uploadData(audiourl, config, audioData);
+            auto rawaudio = json::parse(std::move(audioData))["audioContent"]
+                                .get<std::string>();
+            return decode(rawaudio);
         }
 
-        void getaudio(const std::string& text, const voice_t& tmpvoice)
+        std::string getaudio(const std::string& text, const voice_t& tmpvoice)
         {
-            auto mainVoice{voice};
-            setvoice(tmpvoice);
-            getaudio(text);
+            const auto mainVoice{voice};
+            voice = tmpvoice;
+            auto audio = getaudio(text);
             handler->log(logs::level::debug, "Text spoken as " + getparams());
-            setvoice(mainVoice);
+            voice = mainVoice;
+            return audio;
         }
 
         voice_t getvoice() const
@@ -203,34 +255,35 @@ struct TextToVoice::Handler : public std::enable_shared_from_this<Handler>
         void setvoice(const voice_t& voice)
         {
             this->voice = voice;
-            decltype(voice) defaultvoice = {std::get<language>(voice),
-                                            std::get<gender>(voice), 1};
-            const auto& uselang = voiceMap.contains(voice)
-                                      ? voiceMap.at(voice)
-                                      : voiceMap.at(defaultvoice);
-            audiourl = std::string(convUri) + "&tl=" + uselang + "&q=";
         }
 
         std::string getparams() const
         {
-            decltype(voice) defaultvoice = {std::get<language>(voice),
-                                            std::get<gender>(voice), 1};
-            const auto& uselang = voiceMap.contains(voice)
-                                      ? voiceMap.at(voice)
-                                      : voiceMap.at(defaultvoice);
-            auto genderid = std::get<gender>(voice);
-            return uselang + "/" +
-                   std::string(genderid == gender::male     ? "male"
-                               : genderid == gender::female ? "female"
-                                                            : "unknown") +
-                   "/" + str(std::get<index>(voice));
+            const auto& [code, name, gender] = getmappedvoice();
+            return code + "/" + name + "/" + gender;
         }
 
       private:
         const Handler* handler;
-        const std::string audiopath;
-        std::string audiourl;
+        const std::string audiourl;
         voice_t voice;
+
+        decltype(voiceMap)::mapped_type getmappedvoice() const
+        {
+            decltype(voice) defaultvoice = {std::get<language>(voice),
+                                            std::get<gender>(voice), 1};
+            return voiceMap.contains(voice) ? voiceMap.at(voice)
+                                            : voiceMap.at(defaultvoice);
+        }
+
+        std::string decode(const std::string& encoded)
+        {
+            using namespace boost::beast::detail;
+            std::string decoded(encoded.size(), '\0');
+            // decoded.resize(base64::encoded_size(encoded.size()));
+            base64::decode(&decoded[0], encoded.c_str(), decoded.size());
+            return decoded;
+        }
     } google;
 
     void log(
@@ -279,6 +332,11 @@ bool TextToVoice::speakasync(const std::string& text, const voice_t& voice)
     return handler->speakasync(text, voice);
 }
 
+bool TextToVoice::waitspoken()
+{
+    return handler->waitspoken();
+}
+
 voice_t TextToVoice::getvoice()
 {
     return handler->getvoice();
@@ -289,4 +347,4 @@ void TextToVoice::setvoice(const voice_t& voice)
     handler->setvoice(voice);
 }
 
-} // namespace tts::googlebasic
+} // namespace tts::googleapi
