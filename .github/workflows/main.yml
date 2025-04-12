@@ -39,9 +39,8 @@ jobs:
       run: |
         ./build/examples/googlebasic/googlebasic
         ./build/examples/googleapi/googleapi
-        ./examples/googlecloud/v1/googlecloudv1
-        ./examples/googlecloud/v2/googlecloudv2
-
+        ./build/examples/googlecloud/v1/googlecloudv1
+        ./build/examples/googlecloud/v2/googlecloudv2
 
   test:
     name: Test

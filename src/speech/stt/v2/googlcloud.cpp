@@ -27,7 +27,7 @@ using recognizer_t =
 
 static const std::filesystem::path keyFile = "../conf/key.json";
 static const std::filesystem::path audioDirectory = "audio";
-static const std::filesystem::path recordingName = "recording.wav";
+static const std::filesystem::path recordingName = "recording.flac";
 static const auto audioFilePath = audioDirectory / recordingName;
 static auto recordAudioCmd = getrecordingcmd(audioFilePath.native(), {});
 // static const recognizer_t recognizerInfo = {"lukaszsttproject",
