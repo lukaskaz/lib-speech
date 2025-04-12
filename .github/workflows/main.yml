@@ -34,16 +34,14 @@ jobs:
         sudo apt install sox libsox-fmt-mp3
     - name: Preparing binary
       run: |
-        mkdir build && cd build && cmake -DADD_EXAMPLES=ON .. && make
-    - name: Executing googlebasic program
+        mkdir build && cd build && cmake -DADD_EXAMPLES=ON .. && make 
+    - name: Executing speech example programs
       run: |
         ./build/examples/googlebasic/googlebasic
-    - name: Executing googleapi program
-      run: |
         ./build/examples/googleapi/googleapi
-    - name: Executing googlecloud program
-      run: |
-        ./build/examples/googlecloud/googlecloud 
+        ./examples/googlecloud/v1/googlecloudv1
+        ./examples/googlecloud/v2/googlecloudv2
+
 
   test:
     name: Test

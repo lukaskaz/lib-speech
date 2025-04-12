@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 
 find_package(CURL REQUIRED)
+find_package(Boost 1.74.0 COMPONENTS filesystem)
 find_package(google_cloud_cpp_texttospeech REQUIRED)
 find_package(google_cloud_cpp_speech REQUIRED)
 
@@ -70,3 +71,24 @@ EXTERNALPROJECT_ADD(
 
 include_directories(${source_dir}/include)
 link_directories(${build_dir}/build)
+
+IF(NOT Boost_FOUND)
+    set(source_dir "${CMAKE_BINARY_DIR}/libboost-src")
+    set(build_dir "${CMAKE_BINARY_DIR}/libboost-build")
+    set(include_dir "${build_dir}/include")
+    EXTERNALPROJECT_ADD(
+      libboost
+      URL               "https://archives.boost.io/release/1.74.0/source/boost_1_74_0.tar.gz"
+      PATCH_COMMAND     ""
+      PREFIX            libboost-workspace
+      SOURCE_DIR        ${source_dir}
+      BINARY_DIR        ${build_dir}
+      CONFIGURE_COMMAND ""
+      BUILD_COMMAND     ""
+      UPDATE_COMMAND    ""
+      INSTALL_COMMAND   mkdir ${include_dir} &&
+        cp -a ${source_dir}/boost ${include_dir}
+      TEST_COMMAND      ""
+    )
+    include_directories(${include_dir})
+ENDIF()

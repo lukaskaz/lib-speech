@@ -17,7 +17,7 @@
 namespace stt::v1::googlecloud
 {
 
-using namespace helpers;
+using namespace speech::helpers;
 using namespace std::string_literals;
 namespace speech = google::cloud::speech::v1;
 namespace speech_type = google::cloud::speech_v1;

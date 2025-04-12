@@ -23,6 +23,9 @@ add_library(${PROJECT_NAME} ${SOURCES})
 add_dependencies(${PROJECT_NAME} liblogger)
 add_dependencies(${PROJECT_NAME} libshellcmd)
 add_dependencies(${PROJECT_NAME} libnlohmann)
+IF(NOT Boost_FOUND)
+    add_dependencies(${PROJECT_NAME} libboost)
+ENDIF()
 
 target_link_libraries(${PROJECT_NAME}
     logger

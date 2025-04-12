@@ -4,7 +4,7 @@
 #include <memory>
 #include <string>
 
-namespace helpers
+namespace speech::helpers
 {
 
 class HelpersIf
@@ -65,4 +65,4 @@ std::string str(const auto& value)
 
 std::string getrecordingcmd(const std::string&, const std::string&);
 
-} // namespace helpers
+} // namespace speech::helpers

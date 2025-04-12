@@ -11,7 +11,7 @@
 #include <future>
 #include <vector>
 
-namespace helpers
+namespace speech::helpers
 {
 
 using namespace std::chrono_literals;
@@ -123,14 +123,13 @@ bool Helpers::createasync(std::function<void()>&& func)
 
 bool Helpers::isasyncrunning() const
 {
-    return async.wait_for(0ms) != std::future_status::ready;
+    return async.valid() && async.wait_for(0ms) != std::future_status::ready;
 }
 
 bool Helpers::waitasync()
 {
     if (isasyncrunning())
     {
-        tts::TextToVoiceIf::kill();
         async.wait();
         return true;
     }
@@ -158,4 +157,4 @@ std::string getrecordingcmd(const std::string& file,
            file + " silence -l 1 1 2.0% 1 " + ivtime + " 1.0% pad 0.3 0.2";
 }
 
-} // namespace helpers
+} // namespace speech::helpers

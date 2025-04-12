@@ -17,7 +17,7 @@ namespace stt::v2::googleapi
 {
 
 using json = nlohmann::json;
-using namespace helpers;
+using namespace speech::helpers;
 using namespace std::string_literals;
 
 static const std::filesystem::path configFile = "../conf/init.json";
@@ -39,7 +39,7 @@ struct TextFromVoice::Handler
     Handler(const configmin_t& config) :
         logif{std::get<std::shared_ptr<logs::LogIf>>(config)},
         shell{shell::Factory::create<shell::lnx::bash::Shell>()},
-        helpers{helpers::HelpersFactory::create()},
+        helpers{speech::helpers::HelpersFactory::create()},
         filesystem{this, audioDirectory},
         google{this, configFile, std::get<language>(config)}
     {
@@ -50,7 +50,7 @@ struct TextFromVoice::Handler
     Handler(const configall_t& config) :
         logif{std::get<std::shared_ptr<logs::LogIf>>(config)},
         shell{std::get<std::shared_ptr<shell::ShellIf>>(config)},
-        helpers{std::get<std::shared_ptr<helpers::HelpersIf>>(config)},
+        helpers{std::get<std::shared_ptr<speech::helpers::HelpersIf>>(config)},
         filesystem{this, audioDirectory},
         google{this, configFile, std::get<language>(config)}
     {
@@ -85,7 +85,7 @@ struct TextFromVoice::Handler
   private:
     const std::shared_ptr<logs::LogIf> logif;
     const std::shared_ptr<shell::ShellIf> shell;
-    const std::shared_ptr<helpers::HelpersIf> helpers;
+    const std::shared_ptr<speech::helpers::HelpersIf> helpers;
     class Filesystem
     {
       public:
