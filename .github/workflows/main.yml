@@ -1,0 +1,83 @@
+name: Check build/run/tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+      # as by default
+      types: [opened, synchronize, reopened]
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+    - name: Checking out
+      uses: actions/checkout@v4
+    - name: Building target app
+      run: |
+        mkdir build && cd build && cmake .. && make
+      
+  execution:
+    name: Execution
+    #needs: [build]
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+    - name: Checking out 
+      uses: actions/checkout@v4
+    - name: Setting up dependencies
+      run: |
+        sudo apt install sox libsox-fmt-mp3
+    - name: Preparing binary
+      run: |
+        mkdir build && cd build && cmake -DADD_EXAMPLES=ON .. && make
+    - name: Executing googlebasic program
+      run: |
+        ./build/examples/googlebasic/googlebasic
+    - name: Executing googleapi program
+      run: |
+        ./build/examples/googleapi/googleapi
+    - name: Executing googlecloud program
+      run: |
+        ./build/examples/googlecloud/googlecloud 
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    environment: test
+
+    steps:
+    - name: Checking out
+      uses: actions/checkout@v4
+    - name: Building tests
+      run: |
+        cd tests && mkdir build && cd build && cmake .. && make
+    - name: Running tests
+      run: |
+        ctest --output-on-failure --test-dir tests/build/
+
+  tests-coverage:
+    name: Coverage
+    if: false
+    #needs: [test]
+    runs-on: ubuntu-latest
+    environment: test
+
+    steps:
+    - name: Checking out
+      uses: actions/checkout@v4
+    - name: Setting up dependencies
+      run: |
+        sudo apt install lcov
+        cd tests && git clone https://github.com/lukaskaz/coverage-checker.git
+    - name: Preparing tests
+      run: |
+        cd tests && mkdir build && cd build && cmake .. && make
+    - name: Running coverage checker
+      run: |
+        cd tests/coverage-checker && ./run.sh ../build
+
