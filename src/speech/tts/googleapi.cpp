@@ -1,7 +1,7 @@
-#include "tts/interfaces/googleapi.hpp"
+#include "speech/tts/interfaces/googleapi.hpp"
 
 #include "shell/interfaces/linux/bash/shell.hpp"
-#include "tts/helpers.hpp"
+#include "speech/helpers.hpp"
 
 #include <boost/beast/core/detail/base64.hpp>
 #include <nlohmann/json.hpp>
@@ -16,7 +16,7 @@
 namespace tts::googleapi
 {
 
-using namespace helpers;
+using namespace speech::helpers;
 using namespace std::string_literals;
 using json = nlohmann::json;
 
@@ -56,7 +56,7 @@ struct TextToVoice::Handler : public std::enable_shared_from_this<Handler>
     explicit Handler(const configmin_t& config) :
         logif{std::get<std::shared_ptr<logs::LogIf>>(config)},
         shell{shell::Factory::create<shell::lnx::bash::Shell>()},
-        helpers{helpers::HelpersFactory::create()},
+        helpers{speech::helpers::HelpersFactory::create()},
         filesystem{this, audioDirectory / playbackName},
         google{this, configFile, std::get<voice_t>(config)}
     {}
@@ -64,7 +64,7 @@ struct TextToVoice::Handler : public std::enable_shared_from_this<Handler>
     explicit Handler(const configall_t& config) :
         logif{std::get<std::shared_ptr<logs::LogIf>>(config)},
         shell{std::get<std::shared_ptr<shell::ShellIf>>(config)},
-        helpers{std::get<std::shared_ptr<helpers::HelpersIf>>(config)},
+        helpers{std::get<std::shared_ptr<speech::helpers::HelpersIf>>(config)},
         filesystem{this, audioDirectory / playbackName},
         google{this, configFile, std::get<voice_t>(config)}
     {}
@@ -117,6 +117,11 @@ struct TextToVoice::Handler : public std::enable_shared_from_this<Handler>
         });
     }
 
+    bool waitspoken() const
+    {
+        return helpers->waitasync();
+    }
+
     void setvoice(const voice_t& voice)
     {
         google.setvoice(voice);
@@ -131,7 +136,7 @@ struct TextToVoice::Handler : public std::enable_shared_from_this<Handler>
   private:
     const std::shared_ptr<logs::LogIf> logif;
     const std::shared_ptr<shell::ShellIf> shell;
-    const std::shared_ptr<helpers::HelpersIf> helpers;
+    const std::shared_ptr<speech::helpers::HelpersIf> helpers;
     std::mutex mtx;
     class Filesystem
     {
@@ -191,8 +196,7 @@ struct TextToVoice::Handler : public std::enable_shared_from_this<Handler>
       public:
         Google(const Handler* handler, const std::filesystem::path& configfile,
                const voice_t& voice) :
-            handler{handler},
-            audiourl{[](const std::filesystem::path& file) {
+            handler{handler}, audiourl{[](const std::filesystem::path& file) {
                 std::ifstream ifs(file);
                 if (!ifs.is_open())
                     throw std::runtime_error("Cannot open config file for TTS");
@@ -326,6 +330,11 @@ bool TextToVoice::speakasync(const std::string& text)
 bool TextToVoice::speakasync(const std::string& text, const voice_t& voice)
 {
     return handler->speakasync(text, voice);
+}
+
+bool TextToVoice::waitspoken()
+{
+    return handler->waitspoken();
 }
 
 voice_t TextToVoice::getvoice()

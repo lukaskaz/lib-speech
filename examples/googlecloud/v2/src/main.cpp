@@ -1,8 +1,8 @@
 #include "logs/interfaces/console/logs.hpp"
 #include "logs/interfaces/group/logs.hpp"
 #include "logs/interfaces/storage/logs.hpp"
-#include "speech/stt/interfaces/v2/googleapi.hpp"
-#include "speech/tts/interfaces/googleapi.hpp"
+#include "speech/stt/interfaces/v2/googlecloud.hpp"
+#include "speech/tts/interfaces/googlecloud.hpp"
 
 #include <iostream>
 
@@ -25,7 +25,7 @@ int main(int argc, char** argv)
                 logs::Factory::create<logs::group::Log, logs::group::config_t>(
                     {logconsole, logstorage});
 
-            using namespace tts::googleapi;
+            using namespace tts::googlecloud;
             auto tts =
                 tts::TextToVoiceFactory::create<TextToVoice, configmin_t>(
                     {{tts::language::polish, tts::gender::female, 1}, logif});
@@ -72,20 +72,20 @@ int main(int argc, char** argv)
                     {logconsole, logstorage});
 
             auto tts =
-                tts::TextToVoiceFactory::create<tts::googleapi::TextToVoice,
-                                                tts::googleapi::configmin_t>(
+                tts::TextToVoiceFactory::create<tts::googlecloud::TextToVoice,
+                                                tts::googlecloud::configmin_t>(
                     {{tts::language::polish, tts::gender::female, 1}, logif});
 
             auto stt = stt::TextFromVoiceFactory::create<
-                stt::v2::googleapi::TextFromVoice,
-                stt::v2::googleapi::configmin_t>(
+                stt::v2::googlecloud::TextFromVoice,
+                stt::v2::googlecloud::configmin_t>(
                 {stt::language::polish, "1.0t", logif});
 
             tts->speak("Jestem twoim zwykłym asystentem, powiedz coś");
             auto spoken = stt->listen();
             tts->speak("Jestem pewna w " +
                        speech::helpers::str(std::get<1>(spoken)) +
-                       "%, że powiedziałeś: " + std::get<0>(spoken));
+                       "%, że powiedziałeś: '" + std::get<0>(spoken) + "'");
         }
     }
     catch (std::exception& err)
