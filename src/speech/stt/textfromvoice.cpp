@@ -8,7 +8,7 @@ namespace stt
 void stt::TextFromVoiceIf::kill()
 {
     shell::Factory::create<shell::lnx::bash::Shell>()->run(
-        "killall -s KILL sox");
+        "killall -s KILL rec");
 }
 
 } // namespace stt
